@@ -1,0 +1,31 @@
+{
+  "name": "fa-races",
+  "version": "1.0.0",
+  "description": "The showdown...",
+  "homepage": "https://github.com/FApew/faCarGame#readme",
+  "bugs": {
+    "url": "https://github.com/FApew/faCarGame/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FApew/faCarGame.git"
+  },
+  "license": "ISC",
+  "author": "FA_pew",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cannon-es": "^0.20.0",
+    "express": "^5.1.0",
+    "path": "^0.12.7",
+    "socket.io": "^4.8.1",
+    "url": "^0.11.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
