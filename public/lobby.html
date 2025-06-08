@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAraces ● Lobby</title>
+    <link rel="stylesheet" href="./assets/css/style.css">
+    <link rel="stylesheet" href="./assets/css/lobby.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div id="title">
+
+        FA_races
+    </div>
+    <div id="main">
+        <div id="GUI">
+            <div id="subTitle">
+                Join or Create a Lobby
+            </div>
+            <div id="inputBox">
+                <input type="number" id="code" min="0" max="9999" placeholder="Code">
+                <div class="button" id="join">Join</div>
+                <div class="button" id="create">Create New</div>
+            </div>
+        </div>
+        <div id="carImg"></div>
+    </div>
+</body>
+<script src="./assets/js/lobby.js"></script>
+</html>

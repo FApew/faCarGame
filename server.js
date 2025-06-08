@@ -30,12 +30,55 @@ const io = new Server(expressServer, {
 })
 //!SECTION
 
+let roomList = []
+
+//NOTE - ONconnection
 io.on("connection", socket => {
     console.log(`${socket.id} Connected`)
 
-    io.emit("ip", `${getIP(socket)}`)
+    io.to(socket.id).emit("connected", socket.id/*`${getIP(socket)}`*/)
+
+    //SECTION - Lobby Menagement
+    socket.on("roomJoin", (data) => {
+        const idx = roomList.findIndex(subArr => subArr[0] === data)
+
+        if (idx != -1) {
+            roomList[idx][1]++ 
+        } else {
+            roomList.push([data, 1])
+        }
+
+        socket.room = data
+        console.log(roomList)
+    })
+
+    socket.on("roomCreate", () => {
+        let room
+        do {
+            room = Math.round(Math.random()*9999).toString().padStart(4, "0")
+        } while (roomList.findIndex(subArr => subArr[0] === room) != -1)
+
+        io.to(socket.id).emit("roomCreate", room)
+    })
+
+    socket.on('disconnect', () => {
+        const room = socket.room
+        if (room) {
+            socket.room = undefined
+
+            const idx = roomList.findIndex(subArr => subArr[0] === room)
+            roomList[idx][1]--
+
+            if (roomList[idx][1] <= 0) {
+                roomList.splice(idx, 1)
+            }
+            console.log(roomList)
+        }
+    })
+    //!SECTION
 })
 
+//NOTE - getIP
 function getIP(socket) {
     const forwarded = socket.handshake.headers['x-forwarded-for']
     const socketIP = socket.handshake.address
