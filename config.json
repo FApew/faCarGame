@@ -1,0 +1,8 @@
+{
+    "terrain" : {
+        "gridSize": 20,
+        "noiseScale": 0.1,
+        "maxHeight": 4,
+        "size": 1
+    }
+}
