@@ -26,6 +26,10 @@ const PORT = process.env.PORT || 3500
 const app = express()
 app.use(express.static(path.join(__dirname, "public")))
 app.use('/three', express.static(path.join(__dirname, 'node_modules/three')))
+
+app.get("/config.json", (req, res) => {
+  res.sendFile(path.join(__dirname, "config.json"));
+})
 app.set("trust proxy", true)
 
 const expressServer = app.listen(PORT, () => {
@@ -61,6 +65,7 @@ io.on("connection", socket => {
 
         if (idx != -1) {
             roomList[idx][1]++
+            joinSyncWorld(data, socket)
         } else {
             roomList.push([data, 1])
             createRoom(data)
@@ -147,18 +152,33 @@ async function createRoom(room) {
 
     await setLeader(room)
     await createPhysicWorld(room)
+    await genMap(room)
+
+    joinSyncWorld(room)
 }
 
 //NOTE - SetLederFunction
 async function setLeader(room) {
-    const socket = await io.in(room).fetchSockets()
-    const ID = socket.length > 0 ? socket[0].id : null
+    const sockets = await io.in(room).fetchSockets()
+    const ID = sockets.length > 0 ? sockets[0].id : null
     ROOMS.set(room,{
         ...ROOMS.get(room),
         leader: ID
     })
 
     io.to(ID).emit("leader")
+}
+
+//NOTE - Join World Sync
+async function joinSyncWorld(room, socket) {
+    const phase = ROOMS.get(room).gameState
+    const terrain = ROOMS.get(room).track.terrain
+    const world = ROOMS.get(room).world
+
+    let receiver = socket ? socket.id : room
+
+    io.to(receiver).emit("joinSyncWorld", terrain)
+    io.to(receiver).emit("debugCANNON", serializeCannonWorld(world))
 }
 
 //NOTE - Remove Room
@@ -187,19 +207,36 @@ async function createPhysicWorld(room) {
 //SECTION - Track Generation
 
 //NOTE - genMap
-function genMap(room) {
+async function genMap(room) {
     const world = ROOMS.get(room).world
 
     const {matrix, size} = genTerrain()
-    TerrainData.set(room, matrix)
+    ROOMS.set(room, {
+        ...ROOMS.get(room),
+        track: {
+            terrain: matrix
+        }
+    })
 
-    const tShape = new CANNON.Heightfield(matrix, { size })
+    const tShape = new CANNON.Heightfield(matrix, { elementSize: size })
     const tBody = new CANNON.Body({ mass: 0})
     tBody.addShape(tShape)
-    tBody.position.set(-matrix.length*size / 2, 0, -matrix.length*size / 2)
+    tBody.position.set(-(matrix.length-1)*size/2, 0, (matrix.length-1)*size/2)
+    tBody.quaternion.setFromEuler(-Math.PI/2, 0, 0)
     tBody.id = -1
 
     world.addBody(tBody)
+
+    const radius = 1;  // adjust radius as needed
+    const sphereShape = new CANNON.Sphere(radius);
+    const sphereBody = new CANNON.Body({ mass: 1 }); // mass > 0 to be dynamic
+    sphereBody.id = 3
+    sphereBody.addShape(sphereShape);
+
+    // Position the sphere above the terrain - let's put it at height 10 for example
+    sphereBody.position.set(0, 10, 0);
+
+    world.addBody(sphereBody);
 }
 
 //!SECTION
@@ -212,3 +249,61 @@ function getIP(socket) {
 
     return realIP.startsWith("::ffff:") ? realIP.substring(7) : realIP
 }
+
+//SECTION - DEBUG
+function serializeCannonWorld(world) {
+    return world.bodies.map(body => ({
+        id: body.id,
+        mass: body.mass,
+        position: {
+            x: body.position.x,
+            y: body.position.y,
+            z: body.position.z,
+        },
+        quaternion: {
+            x: body.quaternion.x,
+            y: body.quaternion.y,
+            z: body.quaternion.z,
+            w: body.quaternion.w,
+        },
+        shape: serializeShape(body.shapes[0]),
+    }))
+}
+
+function serializeShape(shape) {
+    if (!shape) return null
+
+    switch (shape.type) {
+        case CANNON.Shape.types.SPHERE:
+            return { type: "SPHERE", radius: shape.radius }
+
+        case CANNON.Shape.types.BOX:
+            return {
+                type: "BOX",
+                halfExtents: {
+                    x: shape.halfExtents.x,
+                    y: shape.halfExtents.y,
+                    z: shape.halfExtents.z,
+                },
+            }
+
+        case CANNON.Shape.types.TRIMESH:
+            return {
+                type: "TRIMESH",
+                vertices: Array.from(shape.vertices),
+                indices: Array.from(shape.indices),
+            }
+
+        case CANNON.Shape.types.HEIGHTFIELD:
+            return {
+                type: "HEIGHTFIELD",
+                data: shape.data,
+                elementSize: shape.elementSize,
+            }
+
+        default:
+            return { type: "UNKNOWN" }
+    }
+}
+
+//!SECTION

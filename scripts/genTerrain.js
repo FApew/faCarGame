@@ -1,10 +1,10 @@
 import { config } from "../server.js"
 import { makeNoise2D } from 'open-simplex-noise'
 
-const noise2D = makeNoise2D(Math.random())
-
 export function genTerrain() {
     const w = config.terrain.gridSize, scale = config.terrain.noiseScale, maxHeight = config.terrain.maxHeight
+
+    const noise2D = makeNoise2D(Date.now() + Math.random())
 
     const matrix = []
     for (let x = 0; x < w; x++) {

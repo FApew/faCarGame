@@ -1,8 +1,11 @@
 {
-    "terrain" : {
-        "gridSize": 20,
+    "terrain": {
+        "gridSize": 100,
         "noiseScale": 0.1,
         "maxHeight": 4,
         "size": 1
+    },
+    "THREE": {
+        "shadowMap": 1028
     }
 }

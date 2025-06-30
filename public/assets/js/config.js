@@ -1,0 +1,1 @@
+export const config = await fetch("/config.json").then(res => res.json())
