@@ -26,10 +26,6 @@ const PORT = process.env.PORT || 3500
 const app = express()
 app.use(express.static(path.join(__dirname, "public")))
 app.use('/three', express.static(path.join(__dirname, 'node_modules/three')))
-app.use((req, res, next) => {
-  console.log(`Request: ${req.method} ${req.url}`)
-  next()
-})
 
 app.get("/config.json", (req, res) => {
   res.sendFile(path.join(__dirname, "config.json"));

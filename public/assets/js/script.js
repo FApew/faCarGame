@@ -1,6 +1,6 @@
 import * as THREE from "/three/build/three.module.js"
-import Stats from "/three/examples/jsm/libs/stats.module.js"
-import { GLTFLoader } from "/three/examples/jsm/loaders/GLTFLoader.js"
+//import Stats from "/three/examples/jsm/libs/stats.module.js"
+//import { GLTFLoader } from "/three/examples/jsm/loaders/GLTFLoader.js"
 import { OrbitControls } from '/three/examples/jsm/controls/OrbitControls.js'
 
 //import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/+esm'
