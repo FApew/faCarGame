@@ -5,7 +5,7 @@ import path from "path"
 import { fileURLToPath } from "url"
 
 import * as CANNON from "cannon-es"
-import { Quaternion, Euler } from "./node_modules/three/build/three.module.js"
+import { Quaternion, Euler } from "three"
 
 import { genTerrain } from "./scripts/genTerrain.js"
 //!SECTION 
