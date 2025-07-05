@@ -82,7 +82,6 @@ io.on("connection", socket => {
         } while (roomList.findIndex(subArr => subArr[0] === room) != -1)
 
         io.to(socket.id).emit("roomCreate", room)
-        createRoom(room)
     })
 
     //NOTE - Disconection
@@ -112,33 +111,6 @@ io.on("connection", socket => {
     function SyncWorld(room, socket) {
         io.to(socket.id).emit("worldSync", syncData)
     }
-
-    //NOTE - Physic Update
-    async function update() {
-        for (let i = 0; i < roomList.length; i++) {
-            const room = roomList[i][0]
-
-            const world = ROOMS.get(room).world
-            if (world) {
-                world.step(1/60)
-
-                const worldState = {
-                    bodies: world.bodies.map(body => {
-
-                        const quat = body.quaternion
-                        return {
-                            ID: body.id,
-                            position: body.position.toArray(),
-                            rotation: new Euler().setFromQuaternion(new Quaternion(quat.x, quat.y, quat.z, quat.w)).toArray()
-                        }
-                    })
-                }
-
-                io.to(room).emit("worldUpdate", worldState)  
-            }
-        }
-    }
-    setInterval(() => update(), 1000 / 60)
 })
 //!SECTION
 
@@ -147,12 +119,19 @@ io.on("connection", socket => {
 //NOTE - Create Room
 async function createRoom(room) {
     ROOMS.set(room, {
-        world: null, track: null, leader: null, gameState: 0
+        world: null, track: null, leader: null, gameState: 0, loop: null
     })
 
     await setLeader(room)
     await createPhysicWorld(room)
     await genMap(room)
+
+    const IntervalID = setInterval(() => update(room), 1000 / 60)
+
+    ROOMS.set(room,{
+        ...ROOMS.get(room),
+        loop: IntervalID
+    })
 
     joinSyncWorld(room)
 }
@@ -182,8 +161,8 @@ async function joinSyncWorld(room, socket) {
 }
 
 //NOTE - Remove Room
-function removeRoom(room) {
-
+async function removeRoom(room) {
+    clearInterval(ROOMS.get(room).loop)
     ROOMS.delete(room)
 }
 
@@ -201,6 +180,29 @@ async function createPhysicWorld(room) {
         ...ROOMS.get(room),
         world: world
     })
+}
+
+//NOTE - Physic Update
+async function update(room) {
+
+    const world = ROOMS.get(room).world
+    if (world) {
+        world.step(1/60)
+
+        const worldState = {
+            bodies: world.bodies.map(body => {
+
+                const quat = body.quaternion
+                return {
+                    ID: body.id,
+                    position: body.position.toArray(),
+                    rotation: new Euler().setFromQuaternion(new Quaternion(quat.x, quat.y, quat.z, quat.w)).toArray()
+                }
+            })
+        }
+
+        io.to(room).emit("worldUpdate", worldState)  
+    }
 }
 //!SECTION
 

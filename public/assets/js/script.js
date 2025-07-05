@@ -1,10 +1,10 @@
 import * as THREE from "/three/build/three.module.js"
-//import Stats from "/three/examples/jsm/libs/stats.module.js"
-//import { GLTFLoader } from "/three/examples/jsm/loaders/GLTFLoader.js"
+import Stats from "/three/examples/jsm/libs/stats.module.js"
+import { GLTFLoader } from "/three/examples/jsm/loaders/GLTFLoader.js"
 import { OrbitControls } from '/three/examples/jsm/controls/OrbitControls.js'
 
-//import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/+esm'
-//import cannonDebugger from 'https://cdn.jsdelivr.net/npm/cannon-es-debugger@1.0.0/+esm'
+import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/+esm'
+import cannonDebugger from 'https://cdn.jsdelivr.net/npm/cannon-es-debugger@1.0.0/+esm'
 
 import { config } from "./config.js"
 
@@ -94,7 +94,7 @@ socket.on("worldUpdate", (data) => {
 function createTerrainMesh(matrix) {
     const size = config.terrain.size, w = matrix.length
 
-    const geometry = new THREE.PlaneGeometry(w*size-size, w*size-size, w - 1, w - 1)
+    const geometry = new THREE.PlaneGeometry(size*(w - 1), size*(w - 1), w - 1, w - 1)
     geometry.rotateX(-Math.PI / 2)
 
     const vertices = geometry.attributes.position
