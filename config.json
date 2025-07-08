@@ -1,11 +1,26 @@
 {
     "terrain": {
-        "gridSize": 100,
+        "gridSize": 251,
         "noiseScale": 0.1,
-        "maxHeight": 4,
-        "size": 1
+        "maxHeight": 3,
+        "size": 1,
+        "border": 1
     },
     "THREE": {
-        "shadowMap": 1028
+        "shadowMap": 4096,
+        "shadowCamera": 200
+    },
+    "gameplay": {
+        "fps": 60
+    },
+    "track": {
+        "tileSize": 25,
+        "normCenter": 0.6,
+        "pCount": 6,
+        "minD": 0.2,
+        "maxTries": 100,
+        "maxCross": 0,
+        "maxStraight": 4,
+        "randomness": 0.5
     }
 }

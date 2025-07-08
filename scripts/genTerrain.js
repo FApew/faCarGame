@@ -6,14 +6,14 @@ export function genTerrain() {
 
     const noise2D = makeNoise2D(Date.now() + Math.random())
 
-    const matrix = []
+    const TrnMtx = []
     for (let x = 0; x < w; x++) {
-        matrix[x] = []
+        TrnMtx[x] = []
         for(let y = 0; y < w; y++) {
             const val = noise2D(x * scale, y * scale)
-            matrix[x][y] = (val + 1) / 2 * maxHeight
+            TrnMtx[x][y] = (val + 1) / 2 * maxHeight
         }
     }
 
-    return {matrix, size: config.terrain.size}
+    return TrnMtx
 }

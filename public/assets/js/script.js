@@ -8,10 +8,28 @@ import cannonDebugger from 'https://cdn.jsdelivr.net/npm/cannon-es-debugger@1.0.
 
 import { config } from "./config.js"
 
-const socket = io()
+const STRAIGHT = {
+    "-1,0": "s1",  // left
+    "1,0": "s3",   // right
+    "0,-1": "s0",  // up
+    "0,1": "s2"    // down
+}
+
+const TURN = {
+    "0,-1>1,0": "t01", // up to right
+    "1,0>0,1": "t00",  // right to down
+    "0,1>-1,0": "t03", // down to left
+    "-1,0>0,-1": "t02", // left to up
+    "1,0>0,-1": "t13",  // right to up
+    "0,1>1,0": "t12",   // down to right
+    "-1,0>0,1": "t11",  // left to down
+    "0,-1>-1,0": "t10'"  // up to left
+}
+
+const socket = io(), loader = new GLTFLoader()
 
 const params = new URLSearchParams(window.location.search)
-if (window.location.href.indexOf("?code=") == -1) {
+if (window.location.href.indexOf("?code=") === -1) {
     window.location.href += "lobby.html"
 }
 
@@ -35,9 +53,9 @@ const container = document.getElementById("world")
 
 //NOTE - Camera INIT
 const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000)
-camera.position.set(0, 100, 40)
-camera.near = 5
-camera.far = 500
+camera.position.set(0, 200, 0)
+camera.near = 1
+camera.far = 750
 //camera.rotation.x = -3*Math.PI/8
 camera.updateProjectionMatrix()
 
@@ -64,10 +82,10 @@ const scene = new THREE.Scene()
 socket.on("joinSyncWorld", (data) => {
     worldBase()
 
-    const terrain = createTerrainMesh(data)
+    const terrain = createTerrainMesh(data.terrain)
+    createTrackTiles(data.tiles)
 
     scene.add(terrain)
-    
 })
 
 //NOTE - WorldUpdate
@@ -79,11 +97,10 @@ socket.on("worldUpdate", (data) => {
             if (body) {
                 body.position.set(...bodyData.position)
                 body.quaternion.setFromEuler(...bodyData.rotation)
+                world.addBody(body)
             }
         }
     })
-    const body = world.bodies.find(b => b.id === 3)
-    world.addBody(body)
     
     cannonDebug.update()
     controls.update()
@@ -120,6 +137,80 @@ function createTerrainMesh(matrix) {
     return mesh
 }
 
+//NOTE - CreateTiles
+function createTrackTiles(tiles) {
+    const normTiles = normalize(tiles)
+
+    const border = config.terrain.border, tileSize = config.track.tileSize, tGrid = config.terrain.gridSize, tSize = config.terrain.size
+
+    const offset = (tGrid-1)*tSize/2
+
+    normTiles.forEach(([x, y, tile], idx) => {
+        const nx = (x+border*2-1/2)*tileSize-offset, ny = (y+border*2-1/2)*tileSize-offset
+
+        switch (tile[0]) {
+            case "s": {
+                load("/model/s.glb",[nx, ny], tile[1])
+                break
+            }
+            case "t": {
+                load("/model/t.glb",[nx, ny], tile[2]-1)
+                break
+            }
+
+            default: {
+                const geometry = new THREE.BoxGeometry(tileSize, 0.1, tileSize)
+                const material = new THREE.MeshBasicMaterial( {color: 0x00ff00} )
+                const cube = new THREE.Mesh(geometry, material)
+                cube.position.set(nx, 7, ny)
+                scene.add(cube)
+            }
+        }
+    })
+
+    function normalize(tiles) {
+        return tiles.map(([x, y, dir], idx) => {
+            //console.log(x, y, getTile(dir, idx, false))
+            return [x, y, getTile(dir, idx, true)]
+        })
+        
+        function getTile(dir, idx, t) {
+            const l = tiles.length
+            const after = tiles[(idx + 1 + l) % l][2]
+            //if (t) console.log(idx, dir, after)
+            return TURN[`${dir}>${after}`] || STRAIGHT[`${after}`] || ""
+        }
+    }
+
+    function load(path, [x, y], rot) {
+        loader.load(path, (gltf) => {
+            const obj = gltf.scene
+            obj.scale.set(.5, .5, .5)
+            obj.traverse((child) => {
+                if (child.isMesh) {
+                    const mat = new THREE.MeshStandardMaterial({
+                        color: child.material.color,
+                        map: child.material.map,
+                        //side: THREE.DoubleSide
+                    })
+                    child.material = mat
+                    child.castShadow = true
+                    child.receiveShadow = true
+                    child.geometry.computeVertexNormals()
+                }
+            })
+
+            const box = new THREE.Box3().setFromObject(obj)
+            const size = new THREE.Vector3()
+            box.getSize(size)
+
+            obj.rotateY(Math.PI/2*parseInt(rot))
+            obj.position.set(x, config.terrain.maxHeight, y)
+            scene.add(obj)
+        })
+    }
+}
+
 //NOTE - Add SUN
 function worldBase() {
     const sunLight = new THREE.DirectionalLight(0xffee88, 4)
@@ -128,7 +219,7 @@ function worldBase() {
     sunLight.shadow.mapSize.width = config.THREE.shadowMap
     sunLight.shadow.mapSize.height = config.THREE.shadowMap
 
-    const d = 100;
+    const d = config.THREE.shadowCamera
     sunLight.shadow.camera.left = -d
     sunLight.shadow.camera.right = d
     sunLight.shadow.camera.top = d
@@ -138,11 +229,11 @@ function worldBase() {
 
     scene.add(sunLight)
 
-    const helper = new THREE.DirectionalLightHelper(sunLight, 5);
-    const shadowCamHelper = new THREE.CameraHelper(sunLight.shadow.camera);
-    scene.add(helper, shadowCamHelper);
+    const helper = new THREE.DirectionalLightHelper(sunLight, 5)
+    const shadowCamHelper = new THREE.CameraHelper(sunLight.shadow.camera)
+    scene.add(helper, shadowCamHelper)
 
-    scene.add(new THREE.AmbientLight(0x404040));
+    scene.add(new THREE.AmbientLight(0x404040))
 }
 
 //!SECTION
@@ -153,9 +244,7 @@ const world = new CANNON.World({
     gravity: new CANNON.Vec3(0, -9.807, 0),
 })
 
-const cannonDebug = cannonDebugger(scene, world, {
-    color: 0x00ff00,
-})
+const cannonDebug = cannonDebugger(scene, world, {color: 0x00ff00})
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enabled = true
@@ -166,9 +255,9 @@ controls.screenSpacePanning = false
 controls.target.set(0, 0, 0)
 
 socket.on("debugCANNON", (bodies) => {
+    
     bodies.forEach(data => {
         let shape
-
         switch (data.shape.type) {
             case "SPHERE":
                 shape = new CANNON.Sphere(data.shape.radius)

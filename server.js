@@ -1,4 +1,4 @@
-//SECTION IMPORTS
+//SECTION - IMPORTS
 import express from "express"
 import { Server } from "socket.io"
 import path from "path"
@@ -8,6 +8,7 @@ import * as CANNON from "cannon-es"
 import { Quaternion, Euler } from "three"
 
 import { genTerrain } from "./scripts/genTerrain.js"
+import { genTrack } from "./scripts/genTrack.js"
 //!SECTION 
 
 //NOTE - JSON Config Parser
@@ -15,7 +16,7 @@ import { readFile } from "fs/promises"
 const json = await readFile(new URL("./config.json", import.meta.url), "utf8")
 export const config = JSON.parse(json)
 
-//SECTION Server Creation
+//SECTION - Server Creation
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -26,10 +27,22 @@ const PORT = process.env.PORT || 3500
 const app = express()
 app.use(express.static(path.join(__dirname, "public")))
 app.use('/three', express.static(path.join(__dirname, 'node_modules/three')))
+app.use('/cannon-es', express.static(path.join(__dirname, 'node_modules/cannon-es')))
+app.use('/model', express.static(path.join(__dirname, 'public/assets/model')))
+app.use('/scripts', express.static(path.join(__dirname, 'scripts')))
 
 app.get("/config.json", (req, res) => {
-  res.sendFile(path.join(__dirname, "config.json"));
+  res.sendFile(path.join(__dirname, "config.json"))
 })
+
+app.get("/public/assets/js/config.js", (req, res) => {
+  res.sendFile(path.join(__dirname, "/public/assets/js/config.js"))
+})
+app.get("/public/assets/js/loadTiles.js", (req, res) => {
+  res.sendFile(path.join(__dirname, "/public/assets/js/loadTiles.js"))
+})
+
+
 app.set("trust proxy", true)
 
 const expressServer = app.listen(PORT, () => {
@@ -79,7 +92,7 @@ io.on("connection", socket => {
         let room
         do {
             room = Math.round(Math.random()*9999).toString().padStart(4, "0")
-        } while (roomList.findIndex(subArr => subArr[0] === room) != -1)
+        } while (roomList.findIndex(subArr => subArr[0] === room) !== -1)
 
         io.to(socket.id).emit("roomCreate", room)
     })
@@ -126,7 +139,7 @@ async function createRoom(room) {
     await createPhysicWorld(room)
     await genMap(room)
 
-    const IntervalID = setInterval(() => update(room), 1000 / 60)
+    const IntervalID = setInterval(() => update(room), 1000 / config.gameplay.fps)
 
     ROOMS.set(room,{
         ...ROOMS.get(room),
@@ -150,13 +163,14 @@ async function setLeader(room) {
 
 //NOTE - Join World Sync
 async function joinSyncWorld(room, socket) {
-    const phase = ROOMS.get(room).gameState
-    const terrain = ROOMS.get(room).track.terrain
-    const world = ROOMS.get(room).world
+    const ROOM = ROOMS.get(room)
+    const phase = ROOM.gameState
+    const terrain = ROOM.track.terrain, tiles = ROOM.track.tiles
+    const world = ROOM.world
 
     let receiver = socket ? socket.id : room
 
-    io.to(receiver).emit("joinSyncWorld", terrain)
+    io.to(receiver).emit("joinSyncWorld", {terrain: terrain, tiles: tiles})
     io.to(receiver).emit("debugCANNON", serializeCannonWorld(world))
 }
 
@@ -187,7 +201,7 @@ async function update(room) {
 
     const world = ROOMS.get(room).world
     if (world) {
-        world.step(1/60)
+        world.step(1/config.gameplay.fps)
 
         const worldState = {
             bodies: world.bodies.map(body => {
@@ -208,26 +222,83 @@ async function update(room) {
 
 //SECTION - Track Generation
 
+const STRAIGHT = {
+    "-1,0": "s1",  // left
+    "1,0": "s3",   // right
+    "0,-1": "s0",  // up
+    "0,1": "s2"    // down
+}
+
+const TURN = {
+    "0,-1>1,0": "t01", // up to right
+    "1,0>0,1": "t00",  // right to down
+    "0,1>-1,0": "t03", // down to left
+    "-1,0>0,-1": "t02", // left to up
+    "1,0>0,-1": "t13",  // right to up
+    "0,1>1,0": "t12",   // down to right
+    "-1,0>0,1": "t11",  // left to down
+    "0,-1>-1,0": "t10'"  // up to left
+}
+
 //NOTE - genMap
 async function genMap(room) {
     const world = ROOMS.get(room).world
 
-    const {matrix, size} = genTerrain()
-    ROOMS.set(room, {
-        ...ROOMS.get(room),
-        track: {
-            terrain: matrix
-        }
-    })
+    const tSize = config.terrain.size, tileSize = config.track.tileSize, border = config.terrain.border
 
-    const tShape = new CANNON.Heightfield(matrix, { elementSize: size })
+    //TerrainMTX
+    const TrnMtx = genTerrain()
+
+    const offset = (TrnMtx.length-1)*tSize/2
+
+    //Terrain Body
+    const tShape = new CANNON.Heightfield(TrnMtx, { elementSize: tSize })
     const tBody = new CANNON.Body({ mass: 0})
     tBody.addShape(tShape)
-    tBody.position.set(-(matrix.length-1)*size/2, 0, (matrix.length-1)*size/2)
+    tBody.position.set(-offset, 0, offset)
     tBody.quaternion.setFromEuler(-Math.PI/2, 0, 0)
     tBody.id = -1
 
-    world.addBody(tBody)
+    //world.addBody(tBody)
+
+    //Track MTX
+    const trkGrid = Math.floor((TrnMtx.length-1)*tSize / tileSize) - border*2
+    const TrkMtx = genTrack(trkGrid)
+
+    ROOMS.set(room, {
+        ...ROOMS.get(room),
+        track: {
+            terrain: TrnMtx,
+            tiles: TrkMtx
+        }
+    })
+    
+    //DebugTiles
+    const tileShape = new CANNON.Box(new CANNON.Vec3(tileSize/2, 0.5, tileSize/2))
+    TrkMtx.forEach(([x, y], idx) => {
+        const nx = (x+border*2-1/2)*tileSize-offset, ny = (y+border*2-1/2)*tileSize-offset
+
+        const tileBody = new CANNON.Body({mass: 0, shape: tileShape})
+        tileBody.position.set(nx, config.terrain.maxHeight, ny)
+        tileBody.id = 1000+idx
+        world.addBody(tileBody)
+    })
+
+
+    /*const bxShape = new CANNON.Box(new CANNON.Vec3((TrnMtx.length-1)/2, 0.1, 0.1))
+    for (let i = 0; i <= trkGrid+2*border+1; i++) {
+        const bxBody = new CANNON.Body({mass: 0, shape: bxShape})
+        bxBody.position.set(0, 8, i*tileSize-(TrnMtx.length-1)*tSize/2-tileSize)
+        bxBody.id = -5
+        world.addBody(bxBody)
+    }
+    for (let i = 0; i <= trkGrid+2*border; i++) {
+        const bxBody = new CANNON.Body({mass: 0, shape: bxShape})
+        bxBody.position.set(i*tileSize-(TrnMtx.length-1)*tSize/2, 8, 0)
+        bxBody.quaternion.setFromEuler(0, Math.PI/2, 0)
+        bxBody.id = -5
+        world.addBody(bxBody)
+    }
 
     const radius = 1;  // adjust radius as needed
     const sphereShape = new CANNON.Sphere(radius);
@@ -238,7 +309,7 @@ async function genMap(room) {
     // Position the sphere above the terrain - let's put it at height 10 for example
     sphereBody.position.set(0, 10, 0);
 
-    world.addBody(sphereBody);
+    world.addBody(sphereBody);*/
 }
 
 //!SECTION
